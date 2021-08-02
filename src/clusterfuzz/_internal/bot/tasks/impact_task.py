@@ -192,7 +192,7 @@ def get_impacts_from_url(regression_range, job_type, platform=None):
       build_revision_mappings.get('stable'), start_revision, end_revision)
   beta = get_impact(
       build_revision_mappings.get('beta'), start_revision, end_revision)
-  head = get_head_impact(build_revision_mappings, start_revision, end_revision)
+  head = get_head_impact(start_revision)
 
   return Impacts(stable, beta, extended_stable, head)
 
@@ -256,22 +256,19 @@ def get_impacts_on_prod_builds(testcase, testcase_file_path):
     return get_impacts_from_url(testcase.regression, testcase.job_type)
 
   # Always record the affected head version.
-  start_revision, end_revision = get_start_and_end_revision(
+  start_revision, _ = get_start_and_end_revision(
       testcase.regression, testcase.job_type)
-  build_revision_mappings = build_info.get_build_to_revision_mappings()
-  impacts.head = get_head_impact(build_revision_mappings, start_revision,
-                                 end_revision)
+  impacts.head = get_head_impact(start_revision)
 
   return impacts
 
 
-def get_head_impact(build_revision_mappings, start_revision, end_revision):
+def get_head_impact(start_revision):
   """Return the impact on 'head', i.e. the latest build we can find."""
-  latest_build = build_revision_mappings.get('canary')
-  if latest_build is None:
-    latest_build = build_revision_mappings.get('dev')
-  return get_impact(
-      latest_build, start_revision, end_revision, is_last_possible_build=True)
+  (latest_milestone, latest_branch_point) = build_info.get_latest_branch()
+  if start_revision > latest_branch_point:
+    return Impact(latest_milestone+1, likely=True)
+  return Impact(latest_milestone, likely=True)
 
 
 def get_impact_on_build(build_type, current_version, testcase,

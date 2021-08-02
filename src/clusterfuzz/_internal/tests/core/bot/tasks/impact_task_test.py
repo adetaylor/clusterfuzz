@@ -195,6 +195,7 @@ class GetImpactsFromUrlTest(ComponentRevisionPatchingTest):
         'clusterfuzz._internal.bot.tasks.impact_task.get_start_and_end_revision',
         'clusterfuzz._internal.bot.tasks.impact_task.get_impact',
         'clusterfuzz._internal.chrome.build_info.get_build_to_revision_mappings',
+        'clusterfuzz._internal.chrome.build_info.get_latest_branch',
         'clusterfuzz._internal.build_management.revisions.revision_to_branched_from',
         'clusterfuzz._internal.datastore.data_handler.get_component_name',
     ])
@@ -216,6 +217,7 @@ class GetImpactsFromUrlTest(ComponentRevisionPatchingTest):
             'version': '76.0.1234.43'
         }
     }
+    self.mock.get_latest_branch.return_value = ('d', 500000)
     self.mock.get_impact.side_effect = [
         impact_task.Impact(),
         impact_task.Impact('s', False),
@@ -361,7 +363,6 @@ class GetImpactsFromUrlTest(ComponentRevisionPatchingTest):
         impact_task.Impact('es', False),
         impact_task.Impact('s', False),
         impact_task.Impact('b', True),
-        impact_task.Impact('c', False)
     ]
 
     impacts = impact_task.get_impacts_from_url('123:456', 'job', 'windows')
@@ -372,8 +373,8 @@ class GetImpactsFromUrlTest(ComponentRevisionPatchingTest):
     self.assertFalse(impacts.stable.likely)
     self.assertEqual('b', impacts.beta.version)
     self.assertTrue(impacts.beta.likely)
-    self.assertEqual('c', impacts.head.version)
-    self.assertFalse(impacts.head.likely)
+    self.assertEqual('d', impacts.head.version)
+    self.assertTrue(impacts.head.likely)
 
     self.mock.get_start_and_end_revision.assert_has_calls(
         [mock.call('123:456', 'job')])
@@ -391,11 +392,7 @@ class GetImpactsFromUrlTest(ComponentRevisionPatchingTest):
         mock.call({
             'version': '75.0.1353.43',
             'revision': '399171'
-        }, 1, 100),
-        mock.call({
-            'version': '76.0.1234.43',
-            'revision': '400000'
-        }, 1, 100, True)
+        }, 1, 100)
     ])
 
   def test_get_impacts_canary_not_exists(self):
@@ -421,8 +418,7 @@ class GetImpactsFromUrlTest(ComponentRevisionPatchingTest):
     self.mock.get_impact.side_effect = [
         impact_task.Impact('es', False),
         impact_task.Impact('s', False),
-        impact_task.Impact('b', True),
-        impact_task.Impact('d', False)
+        impact_task.Impact('b', True)
     ]
 
     impacts = impact_task.get_impacts_from_url('123:456', 'job', 'windows')
@@ -434,7 +430,7 @@ class GetImpactsFromUrlTest(ComponentRevisionPatchingTest):
     self.assertEqual('b', impacts.beta.version)
     self.assertTrue(impacts.beta.likely)
     self.assertEqual('d', impacts.head.version)
-    self.assertFalse(impacts.head.likely)
+    self.assertTrue(impacts.head.likely)
 
     self.mock.get_start_and_end_revision.assert_has_calls(
         [mock.call('123:456', 'job')])
@@ -452,11 +448,7 @@ class GetImpactsFromUrlTest(ComponentRevisionPatchingTest):
         mock.call({
             'version': '75.0.1353.43',
             'revision': '399171'
-        }, 1, 100),
-        mock.call({
-            'version': '76.0.1234.43',
-            'revision': '400000'
-        }, 1, 100, True)
+        }, 1, 100)
     ])
 
   def test_get_impacts_known_component_es_not_exists(self):

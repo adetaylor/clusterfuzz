@@ -26,7 +26,8 @@ BUILD_INFO_PATTERN = ('([a-z]+),([a-z]+),([0-9.]+),'
 BUILD_INFO_URL = 'https://omahaproxy.appspot.com/all?csv=1'
 BUILD_INFO_URL_CD = ('https://chromiumdash.appspot.com/fetch_releases?'
                      'num=1&platform={platform}')
-
+MILESTONE_INFO_URL_CD = ('https://chromiumdash.appspot.com/fetch_milestones?'
+                         'only_active=True&only_branched=True')
 
 class BuildInfo(object):
   """BuildInfo holds build metadata pulled from OmahaProxy."""
@@ -79,6 +80,27 @@ def _fetch_releases_from_chromiumdash(platform, channel=None):
     return []
 
   return build_info_json
+
+
+def _fetch_milestones_from_chromiumdash():
+  """Makes a Call to chromiumdash's fetch_milestones api,
+  and returns its json array response."""
+  query_url = MILESTONE_INFO_URL_CD
+  ms_info = utils.fetch_url(query_url)
+  if not ms_info:
+    logs.log_error('Failed to fetch build info from %s' % query_url)
+    return []
+
+  try:
+    ms_info_json = json.loads(ms_info)
+    if not ms_info_json:
+      logs.log_error('Empty response from %s' % query_url)
+      return []
+  except Exception:
+    logs.log_error('Malformed response from %s' % query_url)
+    return []
+
+  return ms_info_json
 
 
 def get_production_builds_info(platform):
@@ -193,3 +215,14 @@ def get_build_to_revision_mappings(platform=None):
     }
 
   return result
+
+
+def get_latest_branch():
+  """Gets information on the latest milestone branch, even if no builds
+  have yet been made. Returns (milestone, branch point) tuple."""
+  ms_info_json = _fetch_milestones_from_chromiumdash()
+  latest_ms = max([ms['milestone'] for ms in ms_info_json])
+  all_milestones = {ms['milestone']: ms['chromium_main_branch_position']
+    for ms in ms_info_json}
+  latest_branch_point = all_milestones[latest_ms]
+  return (latest_ms, latest_branch_point)
