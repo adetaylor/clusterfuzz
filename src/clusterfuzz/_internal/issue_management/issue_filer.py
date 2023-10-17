@@ -137,88 +137,14 @@ def severity_substitution(label, testcase, security_severity):
   return [label.replace('%SEVERITY%', security_severity_string)]
 
 
-def impact_to_string(impact):
-  """Convert an impact value to a human-readable string."""
-  impact_map = {
-      data_types.SecurityImpact.EXTENDED_STABLE: 'Extended',
-      data_types.SecurityImpact.STABLE: 'Stable',
-      data_types.SecurityImpact.BETA: 'Beta',
-      data_types.SecurityImpact.HEAD: 'Head',
-      data_types.SecurityImpact.NONE: 'None',
-      data_types.SecurityImpact.MISSING: data_types.MISSING_VALUE_STRING,
-  }
-
-  return impact_map[impact]
-
-
-def _get_impact_from_labels(labels):
-  """Get the impact from the label list."""
-  labels = [label.lower() for label in labels]
-  if 'security_impact-extended' in labels:
-    return data_types.SecurityImpact.EXTENDED_STABLE
-  if 'security_impact-stable' in labels:
-    return data_types.SecurityImpact.STABLE
-  if 'security_impact-beta' in labels:
-    return data_types.SecurityImpact.BETA
-  if 'security_impact-head' in labels:
-    return data_types.SecurityImpact.HEAD
-  if 'security_impact-none' in labels:
-    return data_types.SecurityImpact.NONE
-  return data_types.SecurityImpact.MISSING
-
-
-def update_issue_impact_labels(testcase, issue):
-  """Update impact labels on issue."""
+def update_issue_foundin_labels(testcase, issue):
+  """Updates FoundIn- labels on issue."""
   if testcase.one_time_crasher_flag:
     return
 
-  existing_impact = _get_impact_from_labels(issue.labels)
-
-  if testcase.regression.startswith('0:'):
-    # If the regression range starts from the start of time,
-    # then we assume that the bug impacts stable.
-    new_impact = data_types.SecurityImpact.EXTENDED_STABLE
-  elif testcase.is_impact_set_flag:
-    # Add impact label based on testcase's impact value.
-    if testcase.impact_extended_stable_version:
-      new_impact = data_types.SecurityImpact.EXTENDED_STABLE
-    elif testcase.impact_stable_version:
-      new_impact = data_types.SecurityImpact.STABLE
-    elif testcase.impact_beta_version:
-      new_impact = data_types.SecurityImpact.BETA
-    elif testcase.is_crash():
-      new_impact = data_types.SecurityImpact.HEAD
-    else:
-      # Testcase is unreproducible and does not impact extended stable, stable
-      # and beta branches. In this case, there is no impact information.
-      return
-  else:
-    # No impact information.
-    return
-
-  update_issue_foundin_labels(testcase, issue)
-
-  if existing_impact == new_impact:
-    # Correct impact already set.
-    return
-
-  if existing_impact != data_types.SecurityImpact.MISSING:
-    issue.labels.remove('Security_Impact-' + impact_to_string(existing_impact))
-
-  issue.labels.add('Security_Impact-' + impact_to_string(new_impact))
-
-
-def update_issue_foundin_labels(testcase, issue):
-  """Updates FoundIn- labels on issue."""
   if not testcase.is_impact_set_flag:
     return
-  versions_foundin = [
-      x for x in [
-          testcase.impact_beta_version, testcase.impact_stable_version,
-          testcase.impact_extended_stable_version, testcase.impact_head_version
-      ] if x
-  ]
-  milestones_foundin = {x.split('.')[0] for x in versions_foundin}
+  milestones_foundin = testcase.impacted_versions + testcase.likely_impacted_versions
   for found_milestone in milestones_foundin:
     if f'foundin-{found_milestone}' in issue.labels:
       continue
@@ -354,7 +280,7 @@ def file_issue(testcase,
         issue.labels.add('reward-topanel')
         issue.labels.add('External-Fuzzer-Contribution')
 
-      update_issue_impact_labels(testcase, issue)
+      update_issue_foundin_labels(testcase, issue)
 
     # Check for MiraclePtr in stacktrace.
     miracle_label = check_miracleptr_status(testcase)

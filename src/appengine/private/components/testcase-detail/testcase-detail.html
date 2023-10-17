@@ -386,29 +386,12 @@
                   <td class="value impacts">
                     <if-else condition="[[info.testcase.is_impact_set_flag]]">
                       <span slot="t">
-                        <if-else condition="[[info.impacts_production]]">
-                          <span slot="t">
-                            <template is="dom-if" if="[[info.testcase.impact_extended_stable_version]]">
-                              <impact-button
-                                  release="Extended_Stable"
-                                  version="[[info.testcase.impact_extended_stable_version]]"
-                                  likely="[[info.testcase.impact_extended_stable_version_likely]]"></impact-button>
-                            </template>
-                            <template is="dom-if" if="[[info.testcase.impact_stable_version]]">
-                              <impact-button
-                                  release="Stable"
-                                  version="[[info.testcase.impact_stable_version]]"
-                                  likely="[[info.testcase.impact_stable_version_likely]]"></impact-button>
-                            </template>
-                            <template is="dom-if" if="[[info.testcase.impact_beta_version]]">
-                              <impact-button
-                                  release="Beta"
-                                  version="[[info.testcase.impact_beta_version]]"
-                                  likely="[[info.testcase.impact_beta_version_likely]]"></impact-button>
-                            </template>
-                          </span>
-                          <span slot="f">Head</span>
-                        </if-else>
+                        <span slot="t">
+                          Confidently impacted versions: [[info.testcase.impacted_versions]]
+                        </span>
+                        <span slot="t">
+                          Likely impacted versions: [[info.testcase.likely_impacted_versions]]
+                        </span>
                       </span>
                       <span slot="f">Pending</span>
                     </if-else>

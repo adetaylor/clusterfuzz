@@ -189,16 +189,6 @@ class SecuritySeverity:
     ]
 
 
-# Impact values for security issues.
-class SecurityImpact:
-  EXTENDED_STABLE = 0
-  STABLE = 1
-  BETA = 2
-  HEAD = 3
-  NONE = 4
-  MISSING = 5
-
-
 # Archive state enums.
 class ArchiveStatus:
   NONE = 0
@@ -520,48 +510,12 @@ class Testcase(Model):
   # Fuzzer name indices
   fuzzer_name_indices = ndb.StringProperty(repeated=True)
 
-  # The impacted version indices (including beta, stable and extended_stable).
-  impact_version_indices = ndb.StringProperty(repeated=True)
+  # Impacted versions (by milestone number) where we're confident
+  impacted_versions = ndb.StringProperty(repeated=True)
 
-  # The impacted extended stable version.
-  impact_extended_stable_version = ndb.StringProperty()
-
-  # The impacted extended stable version indices.
-  impact_extended_stable_version_indices = ndb.StringProperty(repeated=True)
-
-  # The impacted extended stable version is merely probable (not definite).
-  # See the comment on impact_stable_version_likely.
-  impact_extended_stable_version_likely = ndb.BooleanProperty()
-
-  # The impacted stable version.
-  impact_stable_version = ndb.StringProperty()
-
-  # The impacted stable version indices.
-  impact_stable_version_indices = ndb.StringProperty(repeated=True)
-
-  # The impacted stable version is merely probable (not definite). Because
-  # for a non-asan build, we don't have a stable/beta build. Therefore, we
-  # make an intelligent guess on the version.
-  impact_stable_version_likely = ndb.BooleanProperty()
-
-  # The impacted beta version.
-  impact_beta_version = ndb.StringProperty()
-
-  # The impacted beta version indices.
-  impact_beta_version_indices = ndb.StringProperty(repeated=True)
-
-  # The impacted beta version is merely probable (not definite). See the
-  # comment on impact_stable_version_likely.
-  impact_beta_version_likely = ndb.BooleanProperty()
-
-  # The impacted 'head' version
-  impact_head_version = ndb.StringProperty()
-
-  # The impacted head version indices.
-  impact_head_version_indices = ndb.StringProperty(repeated=True)
-
-  # The impacted head version is likely.
-  impact_head_version_likely = ndb.BooleanProperty()
+  # Impacted versions (by milestone) where it's likely but not certain
+  # we're impacted
+  likely_impacted_versions = ndb.StringProperty(repeated=True)
 
   # Whether or not impact task has been run on this testcase.
   is_impact_set_flag = ndb.BooleanProperty()
@@ -581,10 +535,6 @@ class Testcase(Model):
 
   def has_impacts(self):
     return self.project_name == 'chromium' and not self.one_time_crasher_flag
-
-  def impacts_production(self):
-    return (bool(self.impact_extended_stable_version) or
-            bool(self.impact_stable_version) or bool(self.impact_beta_version))
 
   def is_status_unreproducible(self):
     return self.status and self.status.startswith('Unreproducible')
@@ -608,38 +558,6 @@ class Testcase(Model):
     fuzzer_name_indices = list({self.fuzzer_name, self.overridden_fuzzer_name})
     self.fuzzer_name_indices = [f for f in fuzzer_name_indices if f]
 
-    # If the impact task hasn't been run (aka is_impact_set_flag=False) OR
-    # if impact isn't applicable (aka has_impacts() is False), we wipe all
-    # the impact fields' indices.
-    if self.has_impacts() and self.is_impact_set_flag:
-      self.impact_extended_stable_version_indices = (
-          search_tokenizer.tokenize_impact_version(
-              self.impact_extended_stable_version))
-      self.impact_stable_version_indices = (
-          search_tokenizer.tokenize_impact_version(self.impact_stable_version))
-      self.impact_beta_version_indices = (
-          search_tokenizer.tokenize_impact_version(self.impact_beta_version))
-      self.impact_head_version_indices = (
-          search_tokenizer.tokenize_impact_version(self.impact_head_version))
-      self.impact_version_indices = list(
-          set(self.impact_extended_stable_version_indices +
-              self.impact_stable_version_indices +
-              self.impact_head_version_indices +
-              self.impact_beta_version_indices))
-      if self.impact_extended_stable_version:
-        self.impact_version_indices.append('extended_stable')
-      if self.impact_beta_version:
-        self.impact_version_indices.append('beta')
-      if self.impact_stable_version:
-        self.impact_version_indices.append('stable')
-      if not self.impacts_production():
-        self.impact_version_indices.append('head')
-    else:
-      self.impact_version_indices = []
-      self.impact_extended_stable_version_indices = []
-      self.impact_stable_version_indices = []
-      self.impact_beta_version_indices = []
-
   def _pre_put_hook(self):
     self.populate_indices()
 
@@ -653,10 +571,8 @@ class Testcase(Model):
     )
 
   def set_impacts_as_na(self):
-    self.impact_stable_version = self.impact_beta_version = None
-    self.impact_extended_stable_version = None
-    self.impact_stable_version_likely = self.impact_beta_version_likely = False
-    self.impact_extended_stable_version_likely = False
+    self.impacted_versions = None
+    self.likely_impacted_versions = None
     self.is_impact_set_flag = False
 
   def _ensure_metadata_is_cached(self):

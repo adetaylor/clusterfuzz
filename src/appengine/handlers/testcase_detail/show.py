@@ -580,8 +580,6 @@ def get_testcase_detail(testcase):
           testcase.has_blame(),
       'show_impact':
           testcase.has_impacts(),
-      'impacts_production':
-          testcase.impacts_production(),
       'find_similar_issues_options':
           FIND_SIMILAR_ISSUES_OPTIONS,
       'auto_delete_timestamp':

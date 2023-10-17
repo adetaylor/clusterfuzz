@@ -155,8 +155,7 @@ def get_result():
         'projectName': testcase.project_name,
         'platform': testcase.platform,
         'issueId': testcase.bug_information or testcase.group_bug_information,
-        'showImpacts': testcase.has_impacts(),
-        'impactsProduction': testcase.impacts_production()
+        'showImpacts': testcase.has_impacts()
     }
     if testcase.timestamp:
       item['timestamp'] = utils.utc_datetime_to_timestamp(testcase.timestamp)

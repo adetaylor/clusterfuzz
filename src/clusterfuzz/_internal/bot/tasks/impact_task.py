@@ -48,25 +48,19 @@ class Impact:
 class Impacts:
   """Represents impacts on different release channels."""
 
-  def __init__(self, stable=None, beta=None, extended_stable=None, head=None):
-    self.stable = stable or Impact()
-    self.beta = beta or Impact()
-    self.extended_stable = extended_stable or Impact()
-    self.head = head or Impact()
+  def __init__(self, impacts=None):
+    if impacts is None:
+      impacts = dict()
+    self.impacts = impacts # map from branch number -> Impacts
 
   def is_empty(self):
-    return (self.extended_stable.is_empty() and self.stable.is_empty() and
-            self.beta.is_empty() and self.head.is_empty())
+    return len(self.impacts) > 0
 
   def get_extra_trace(self):
-    return (
-        self.extended_stable.extra_trace + '\n' + self.stable.extra_trace + '\n'
-        + self.beta.extra_trace + '\n' + self.head.extra_trace).strip()
+    "\n".join([v.extra_trace for v in self.impacts.values()])
 
   def __eq__(self, other):
-    return (self.extended_stable == other.extended_stable and
-            self.stable == other.stable and self.beta == other.beta and
-            self.head == other.head)
+    self.impacts == other.impacts
 
 
 def get_chromium_component_start_and_end_revision(start_revision, end_revision,
@@ -121,6 +115,23 @@ def get_component_information_by_name(chromium_revision,
   return None
 
 
+def get_impacts_to_check(platform=None):
+  """Returns a map of milestone->revision"""
+  build_revision_mappings = build_info.get_build_to_revision_mappings(platform)
+  if not build_revision_mappings:
+    return None
+
+  # Deduplicate the versions we need to check
+  impacts_to_check = dict() # map version -> revision
+  for build in ['extended_stable', 'stable', 'beta', 'canary', 'dev']:
+    mapping = build_revision_mappings.get(build)
+    if not mapping:
+      return None
+    chromium_revision = mapping['revision']
+    chromium_version = mapping['version']
+    impacts_to_check[chromium_version] = chromium_revision
+  return impacts_to_check
+
 def get_component_impacts_from_url(component_name,
                                    regression_range,
                                    job_type,
@@ -134,27 +145,16 @@ def get_component_impacts_from_url(component_name,
   logs.log('Start and end revision %s, %s' % (start_revision, end_revision))
   if not end_revision:
     return Impacts()
-
-  build_revision_mappings = build_info.get_build_to_revision_mappings(platform)
-  if not build_revision_mappings:
+  impacts_to_check = get_impacts_to_check(platform)
+  if impacts_to_check is None:
     return Impacts()
 
   found_impacts = {}
-  for build in ['extended_stable', 'stable', 'beta', 'canary']:
-    mapping = build_revision_mappings.get(build)
-    logs.log('Considering impacts for %s.' % (build))
-    # TODO(yuanjunh): bypass for now but remove it after ES is enabled.
-    if build == 'extended_stable' and not mapping:
-      found_impacts[build] = Impact()
-      continue
-    # Some platforms don't have canary, so use dev to represent
-    # the affected head version.
-    if build == 'canary' and not mapping:
-      mapping = build_revision_mappings.get('dev')
-    if not mapping:
-      return Impacts()
+  for chromium_version, chromium_revision in impacts_to_check:
+    logs.log('Considering impacts for %s.' % (chromium_version))
     chromium_revision = mapping['revision']
-    logs.log('Chromium revision is %s.' % (chromium_revision))
+    chromium_version = mapping['version']
+    logs.log('Chromium revision is %s, version %s.' % (chromium_revision, chromium_version))
     component_revision = get_component_information_by_name(
         chromium_revision, component_name)
     logs.log('Component revision is %s.' % (component_revision))
@@ -168,12 +168,11 @@ def get_component_impacts_from_url(component_name,
       branched_from = component_revision['rev']
     impact = get_impact({
         'revision': branched_from,
-        'version': mapping['version']
+        'version': chromium_version
     }, start_revision, end_revision, build == 'canary')
     logs.log('Resulting impact is %s.' % (str(impact)))
-    found_impacts[build] = impact
-  return Impacts(found_impacts['stable'], found_impacts['beta'],
-                 found_impacts['extended_stable'], found_impacts['canary'])
+    found_impacts[chromium_version] = impact
+  return Impacts(found_impacts)
 
 
 def get_impacts_from_url(regression_range, job_type, platform=None):
@@ -193,21 +192,16 @@ def get_impacts_from_url(regression_range, job_type, platform=None):
     return Impacts()
 
   logs.log(f'Gathering build to revision mappings for {platform}')
-  build_revision_mappings = build_info.get_build_to_revision_mappings(platform)
-  if not build_revision_mappings:
+  impacts_to_check = get_impacts_to_check(platform)
+  if impacts_to_check is None:
     return Impacts()
 
   logs.log('Calculating impacts from URL')
-  extended_stable = get_impact(
-      build_revision_mappings.get('extended_stable'), start_revision,
-      end_revision)
-  stable = get_impact(
-      build_revision_mappings.get('stable'), start_revision, end_revision)
-  beta = get_impact(
-      build_revision_mappings.get('beta'), start_revision, end_revision)
-  head = get_head_impact(build_revision_mappings, start_revision, end_revision)
+  impacts = dict()
+  for chromium_version, chromium_revision in impacts_to_check:
+    impacts[chromium_version] = get_impact(chromium_revision, start_revision, end_revision)
 
-  return Impacts(stable, beta, extended_stable, head)
+  return Impacts(impacts)
 
 
 def get_impact(build_revision,
@@ -255,15 +249,15 @@ def get_head_impact(build_revision_mappings, start_revision, end_revision):
 
 def set_testcase_with_impacts(testcase, impacts):
   """Set testcase's impact-related fields given impacts."""
-  testcase.impact_extended_stable_version = impacts.extended_stable.version
-  testcase.impact_extended_stable_version_likely = \
-    impacts.extended_stable.likely
-  testcase.impact_stable_version = impacts.stable.version
-  testcase.impact_stable_version_likely = impacts.stable.likely
-  testcase.impact_beta_version = impacts.beta.version
-  testcase.impact_beta_version_likely = impacts.beta.likely
-  testcase.impact_head_version = impacts.head.version
-  testcase.impact_head_version_likely = impacts.head.likely
+  impacted_versions = []
+  likely_impacted_versions = []
+  for k, v in impacts.impacts:
+    if v.likely:
+      likely_impacted_versions.append(k)
+    else:
+      impacted_versions.append(k)
+  testcase.impacted_versions = impacted_versions
+  testcase.likely_impacted_versions = likely_impacted_versions
   testcase.is_impact_set_flag = True
 
 
